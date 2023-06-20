@@ -2,8 +2,9 @@ const http = require('http');
 const fs = require('fs');
 const url = require("url");
 const qs = require("querystring")
+const path = require("path");
 
-const templateHTML = (title, list, body) => {
+const templateHTML = (title, list, body, control) => {
     return `
         <!doctype html>
             <html lang="ko">
@@ -14,7 +15,9 @@ const templateHTML = (title, list, body) => {
                 <body>
                     <h1><a href="/">WEB</a></h1>
                     ${list}
-                    <a href="/create">생성</a>
+                    
+                    ${control}
+                    
                     ${body}
                 </body>
             </html>
@@ -45,7 +48,9 @@ let app = http.createServer((request,response) => {
                 const description = "Hello, Node.js";
                 const list = templateList(filelist);
 
-                const template = templateHTML(title, list, `<h2>${title}</h2>>${description}`);
+                const template = templateHTML(title, list,
+                    `<h2>${title}</h2>>${description}`,
+                    `<a href="/create">생성</a>`);
                 response.writeHead(200);
                 response.end(template);
             })
@@ -57,7 +62,12 @@ let app = http.createServer((request,response) => {
                     const title = queryData.id;
                     const list = templateList(filelist);
 
-                    const template = templateHTML(title, list, `<h2>${title}</h2>>${description}`);
+                    const template = templateHTML(title, list, `<h2>${title}</h2>>${description}`,
+                        `<a href="/create">생성</a> 
+                        <a href="/update?id=${title}">수정</a>
+                        <a href="/delete?id=${title}">삭제</a>
+`
+                    );
                     response.writeHead(200);
                     response.end(template);
                 });
@@ -71,14 +81,14 @@ let app = http.createServer((request,response) => {
             const list = templateList(filelist);
 
             const template = templateHTML(title, list, `
-                <form action="http://localhost:3100/create_process" method="post">
-                <p><input type="text" name="title" placeholder="title"/></p>
-                <div>
-                    <textarea type="text" name="description" placeholder="description"></textarea>
-                </div>
-                <input type="submit">생성</input>
+                <form action="/create_process" method="post">
+                    <p><input type="text" name="title" placeholder="title"/></p>
+                    <div>
+                        <textarea type="text" name="description" placeholder="description"></textarea>
+                    </div>
+                    <input type="submit"/>
                 </form>
-            `);
+            `,'');
             response.writeHead(200);
             response.end(template);
         })
@@ -92,10 +102,55 @@ let app = http.createServer((request,response) => {
             const post = qs.parse(body);
             const title = post.title;
             const description = post.description
-            console.log(description);
+            fs.writeFile(`data/${title}`, description, "utf8",() => {
+                response.writeHead(302, {Location : `/?id=${title}`});
+                response.end();
+            })
         })
-        response.writeHead(200);
-        response.end('success');
+
+    } else if(pathname === `/update`){
+        fs.readdir('./data',(error, filelist) => {
+
+            fs.readFile(`data/${queryData.id}`,"utf8",(err, description) => {
+                const title = queryData.id;
+                const list = templateList(filelist);
+
+                const template = templateHTML(title, list,
+                  `
+                    <form action="/update_process" method="post">
+                    <input type="hidden" name="id" value="${title}"/>
+                        <p><input type="text" name="title" placeholder="title" value="${title}"/></p>
+                        <div>
+                            <textarea type="text" name="description" placeholder="description">${description}</textarea>
+                        </div>
+                        <input type="submit"/>
+                    </form>
+                 `,
+                  `<a href="/create">생성</a> <a href="/update?id=${title}">수정</a>`
+                );
+                response.writeHead(200);
+                response.end(template);
+            });
+        })
+    } else if(pathname === "/update_process"){
+        let body = "";
+        request.on('data', (data) => {
+            body = body + data;
+        });
+
+        request.on("end", () => {
+            const post = qs.parse(body);
+            const id = post.id
+            const title = post.title;
+            const description = post.description
+            console.log(post);
+            fs.rename(`data/${id}`, `data/${title}`, (err) => {
+                fs.writeFile(`data/${title}`, description, "utf8",() => {
+                    response.writeHead(302, {Location : `/?id=${title}`});
+                    response.end();
+                })
+            });
+        });
     }
     else {
         response.writeHead(200);
