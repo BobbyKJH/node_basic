@@ -4,8 +4,9 @@ const url = require("url");
 const qs = require("querystring")
 const path = require("path");
 
-const templateHTML = (title, list, body, control) => {
-    return `
+const template = {
+    HTML: (title, list, body, control) => {
+        return `
         <!doctype html>
             <html lang="ko">
                 <head>
@@ -22,18 +23,21 @@ const templateHTML = (title, list, body, control) => {
                 </body>
             </html>
     `
-}
+    },
+    List: (filelist) => {
+        let list = `<ul>`;
 
-const templateList = (filelist) => {
-    let list = `<ul>`;
+        for(let i = 0; i < filelist.length;i++){
+            list = list + `<li><a href="/?id=${filelist[i]}">${filelist[i]}</a></li>`
+        }
+        list = list + `</ul>`
 
-    for(let i = 0; i < filelist.length;i++){
-        list = list + `<li><a href="/?id=${filelist[i]}">${filelist[i]}</a></li>`
+        return list
     }
-    list = list + `</ul>`
-
-    return list
 }
+
+
+
 
 let app = http.createServer((request,response) => {
     let _url = request.url;
@@ -46,13 +50,13 @@ let app = http.createServer((request,response) => {
             fs.readdir('./data',(error, filelist) => {
                 const title = "Welcome";
                 const description = "Hello, Node.js";
-                const list = templateList(filelist);
+                const list = template.List(filelist);
 
-                const template = templateHTML(title, list,
+                const html = template.HTML(title, list,
                     `<h2>${title}</h2>>${description}`,
                     `<a href="/create">생성</a>`);
                 response.writeHead(200);
-                response.end(template);
+                response.end(html);
             })
 
         } else{
@@ -60,16 +64,20 @@ let app = http.createServer((request,response) => {
 
                 fs.readFile(`data/${queryData.id}`,"utf8",(err, description) => {
                     const title = queryData.id;
-                    const list = templateList(filelist);
+                    const list = template.List(filelist);
 
-                    const template = templateHTML(title, list, `<h2>${title}</h2>>${description}`,
-                        `<a href="/create">생성</a> 
+                    const html = template.HTML(title, list, `<h2>${title}</h2>>${description}`,
+                        `
+                        <a href="/create">생성</a> 
                         <a href="/update?id=${title}">수정</a>
-                        <a href="/delete?id=${title}">삭제</a>
-`
+                        <form action="delete_process" method="post">
+                            <input type="hidden" name="id" value="${title}">
+                            <input type="submit" value="delete">
+                        </form>
+                        `
                     );
                     response.writeHead(200);
-                    response.end(template);
+                    response.end(html);
                 });
             })
         }
@@ -78,9 +86,9 @@ let app = http.createServer((request,response) => {
 
         fs.readdir('./data',(error, filelist) => {
             const title = "WEB - CREATE";
-            const list = templateList(filelist);
+            const list = template.List(filelist);
 
-            const template = templateHTML(title, list, `
+            const html = template.HTML(title, list, `
                 <form action="/create_process" method="post">
                     <p><input type="text" name="title" placeholder="title"/></p>
                     <div>
@@ -90,7 +98,7 @@ let app = http.createServer((request,response) => {
                 </form>
             `,'');
             response.writeHead(200);
-            response.end(template);
+            response.end(html);
         })
     } else if(pathname === "/create_process"){
         let body = "";
@@ -113,9 +121,9 @@ let app = http.createServer((request,response) => {
 
             fs.readFile(`data/${queryData.id}`,"utf8",(err, description) => {
                 const title = queryData.id;
-                const list = templateList(filelist);
+                const list = template.List(filelist);
 
-                const template = templateHTML(title, list,
+                const html = template.HTML(title, list,
                   `
                     <form action="/update_process" method="post">
                     <input type="hidden" name="id" value="${title}"/>
@@ -129,7 +137,7 @@ let app = http.createServer((request,response) => {
                   `<a href="/create">생성</a> <a href="/update?id=${title}">수정</a>`
                 );
                 response.writeHead(200);
-                response.end(template);
+                response.end(html);
             });
         })
     } else if(pathname === "/update_process"){
@@ -150,6 +158,21 @@ let app = http.createServer((request,response) => {
                     response.end();
                 })
             });
+        });
+    }else if(pathname === "/delete_process"){
+        let body = "";
+        request.on('data', (data) => {
+            body = body + data;
+        });
+
+        request.on("end", () => {
+            const post = qs.parse(body);
+            const id = post.id
+
+            fs.unlink(`data/${id}`, (err) => {
+                response.writeHead(302, {Location : `/`});
+                response.end();
+            })
         });
     }
     else {
