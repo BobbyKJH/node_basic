@@ -3,6 +3,7 @@ const fs = require('fs');
 const url = require("url");
 const qs = require("querystring")
 const path = require("path");
+const sanitizeHtml = require('sanitize-html');
 
 const template = {
     HTML: (title, list, body, control) => {
@@ -61,17 +62,21 @@ let app = http.createServer((request,response) => {
 
         } else{
             fs.readdir('./data',(error, filelist) => {
-
-                fs.readFile(`data/${queryData.id}`,"utf8",(err, description) => {
+            const filteredId = path.parse(queryData.id).base;
+                fs.readFile(`data/${filteredId}`,"utf8",(err, description) => {
                     const title = queryData.id;
                     const list = template.List(filelist);
-
-                    const html = template.HTML(title, list, `<h2>${title}</h2>>${description}`,
+                    const sanitizedTitle = sanitizeHtml(title);
+                    const sanitizedDescription = sanitizeHtml(description, {
+                        allowedTags: ["h1"]
+                    })
+                    const html = template.HTML(sanitizedTitle, list,
+                    `<h2>${sanitizedTitle}</h2>>${sanitizedDescription}`,
                         `
                         <a href="/create">생성</a> 
-                        <a href="/update?id=${title}">수정</a>
+                        <a href="/update?id=${sanitizedTitle}">수정</a>
                         <form action="delete_process" method="post">
-                            <input type="hidden" name="id" value="${title}">
+                            <input type="hidden" name="id" value="${sanitizedTitle}">
                             <input type="submit" value="delete">
                         </form>
                         `
@@ -118,8 +123,9 @@ let app = http.createServer((request,response) => {
 
     } else if(pathname === `/update`){
         fs.readdir('./data',(error, filelist) => {
+            const filteredId = path.parse(queryData.id).base;
 
-            fs.readFile(`data/${queryData.id}`,"utf8",(err, description) => {
+            fs.readFile(`data/${filteredId}`,"utf8",(err, description) => {
                 const title = queryData.id;
                 const list = template.List(filelist);
 
@@ -133,8 +139,8 @@ let app = http.createServer((request,response) => {
                         </div>
                         <input type="submit"/>
                     </form>
-                 `,
-                  `<a href="/create">생성</a> <a href="/update?id=${title}">수정</a>`
+                `,
+                `<a href="/create">생성</a> <a href="/update?id=${title}">수정</a>`
                 );
                 response.writeHead(200);
                 response.end(html);
@@ -168,8 +174,8 @@ let app = http.createServer((request,response) => {
         request.on("end", () => {
             const post = qs.parse(body);
             const id = post.id
-
-            fs.unlink(`data/${id}`, (err) => {
+            const filterdId = path.parse(id).base;
+            fs.unlink(`data/${filterdId}`, (err) => {
                 response.writeHead(302, {Location : `/`});
                 response.end();
             })
